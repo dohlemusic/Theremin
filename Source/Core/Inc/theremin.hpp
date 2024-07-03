@@ -1,0 +1,21 @@
+/*
+ * theremin.hpp
+ *
+ *  Created on: Jul 3, 2024
+ *      Author: Max
+ */
+
+#ifndef INC_THEREMIN_HPP_
+#define INC_THEREMIN_HPP_
+
+
+namespace theremin
+{
+void init();
+void updatePitch(float frequencyHz);
+void updateVolume(float volume);
+float processSample();
+}
+
+
+#endif /* INC_THEREMIN_HPP_ */
