@@ -31,7 +31,7 @@ void init() {
 }
 
 void updatePitch(float frequencyHz) {
-	oscilator.SetFreq(frequencyHz);
+	oscilator.SetFreq(freqFilter.Process(frequencyHz));
 }
 
 void updateVolume(float volume) {
