@@ -13,6 +13,7 @@ namespace theremin
 {
 void init();
 void updatePitch(float frequencyHz);
+void updateCutoff(float cutoff);
 void updateVolume(float volume);
 float processSample();
 }

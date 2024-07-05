@@ -59,18 +59,24 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define WAVEFORM_Pin GPIO_PIN_0
-#define WAVEFORM_GPIO_Port GPIOA
-#define TONE_Pin GPIO_PIN_1
-#define TONE_GPIO_Port GPIOA
-#define POT_EXTRA_Pin GPIO_PIN_6
-#define POT_EXTRA_GPIO_Port GPIOA
-#define MIC_Pin GPIO_PIN_7
+#define POT_WAVEFORM_Pin GPIO_PIN_0
+#define POT_WAVEFORM_GPIO_Port GPIOA
+#define POT_TONE_Pin GPIO_PIN_1
+#define POT_TONE_GPIO_Port GPIOA
+#define MIC_Pin GPIO_PIN_2
 #define MIC_GPIO_Port GPIOA
+#define POT_PITCH_Pin GPIO_PIN_6
+#define POT_PITCH_GPIO_Port GPIOA
+#define POT_RANGE_Pin GPIO_PIN_7
+#define POT_RANGE_GPIO_Port GPIOA
 #define LED_EYES_Pin GPIO_PIN_0
 #define LED_EYES_GPIO_Port GPIOB
 #define PITCH_IN_Pin GPIO_PIN_8
 #define PITCH_IN_GPIO_Port GPIOA
+#define MIDI_TX_Pin GPIO_PIN_9
+#define MIDI_TX_GPIO_Port GPIOA
+#define BUT_CALIB_Pin GPIO_PIN_10
+#define BUT_CALIB_GPIO_Port GPIOA
 #define T_SWDIO_Pin GPIO_PIN_13
 #define T_SWDIO_GPIO_Port GPIOA
 #define T_SWCLK_Pin GPIO_PIN_14

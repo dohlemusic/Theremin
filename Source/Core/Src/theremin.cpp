@@ -14,6 +14,11 @@ daisysp::Oscillator oscilator;
 daisysp::LadderFilter filter;
 daisysp::OnePole freqFilter;
 
+float smoothstep (float x) {
+   return x * x * (3.0f - 2.0f * x);
+}
+
+
 void init() {
 	oscilator.Init(44100);
 	oscilator.SetFreq(440.f);
@@ -22,8 +27,8 @@ void init() {
 
 	filter.Init(44100);
 	filter.SetFilterMode(filter.FilterMode::LP24);
-	filter.SetFreq(1500.f);
-	filter.SetRes(0.6f);
+	filter.SetFreq(2500.f);
+	filter.SetRes(0.4f);
 
 	freqFilter.Init();
 	freqFilter.SetFilterMode(daisysp::OnePole::FILTER_MODE_LOW_PASS);
@@ -34,14 +39,23 @@ void updatePitch(float frequencyHz) {
 	oscilator.SetFreq(freqFilter.Process(frequencyHz));
 }
 
+void updateCutoff(float cutoff)
+{
+	filter.SetFreq(cutoff);
+}
+
 void updateVolume(float volume) {
 	oscilator.SetAmp(volume);
 }
 
 float processSample() {
-	//oscillator.SetSyncFreq(440.f + lfoOut * 10);
-	//filter.SetFreq(600.f + 4000.f * (lfoOut + 0.2));
-	//oscillator.SetWaveshape(0.5f * (lfoOut + 1.f));
-	return filter.Process(oscilator.Process());
+	float sample = oscilator.Process();
+
+	// model assymetric clipping of the bottom of the triangle wave, adding some warm fuzz to the signal
+	sample = 0.25f * sample + 0.75f;
+	sample = smoothstep(sample);
+	sample = 4.f * (sample - 0.75f);
+
+	return 2.f * filter.Process(sample);
 }
 }
