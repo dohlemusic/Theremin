@@ -56,12 +56,13 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim8;
 
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-#define HALF_AUDIO_BUFFER_SIZE 192
+#define HALF_AUDIO_BUFFER_SIZE 384
 uint32_t AudioBuffer[HALF_AUDIO_BUFFER_SIZE * 2] = { 0 };
 
 /* USER CODE END PV */
@@ -79,6 +80,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM7_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -107,13 +109,13 @@ void calibrate()
 			* (SystemCoreClock / static_cast<float>(volumePulsesElapsed)) + 100;
 }
 
-float Read_ADC(uint32_t channel)
+float readADC(uint32_t channel)
 {
     ADC_ChannelConfTypeDef sConfig = {0};
 
     sConfig.Channel = channel;
     sConfig.Rank = 1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES_5;
+    sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
 
     if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
     {
@@ -126,14 +128,23 @@ float Read_ADC(uint32_t channel)
     uint32_t adcValue = HAL_ADC_GetValue(&hadc2); // Get the ADC value
     HAL_ADC_Stop(&hadc2); // Stop ADC
 
-    return adcValue / 4095.f;
+    constexpr float dacToFloat = 1.f/2500.f;
+    return adcValue * dacToFloat;
 }
+
+
+void readPotentiometers()
+{
+	theremin::updateCutoff((1.f - readADC(2)) * 10000.f);
+}
+
 /*
  * This callback gets called when any of the buttons gets pressed.
  * The purpose of the associated TIM1 is to debounce button presses
  */
 extern "C" void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM1) {
+		// TODO: check which channel it comes from to identify which button was pressed
 		calibrate();
 	}
 }
@@ -153,26 +164,18 @@ void pitchMeasurementInterruptHandler(void) {
 	float frequency = htim4.Init.Period
 			* (SystemCoreClock / static_cast<float>(pitchPulsesElapsed));
 
+	// known range of the pitch oscillator
 	const float readoutMin = 0;
 	const float readoutMax = 7000;
 
-	const float targetMin = 20;
-	const float targetMax = 3000;
-
 	frequency -= pitchBaseFrequency;
 	frequency *= -1;
+	frequency *= 0.4f;
 
-	if (frequency < readoutMin)
-		frequency = readoutMin;
-	if (frequency > readoutMax)
-		frequency = readoutMax;
-
-	frequency = map(frequency, readoutMin, readoutMax, targetMin, targetMax);
-	if (frequency == targetMin)
-		frequency = 0;
+	if(frequency < 1.f)
+		frequency = 1.f;
 
 	theremin::updatePitch(frequency);
-
 	lastPitchMeasurementCPUClockCount = currentCPUClockCount;
 	HAL_TIM_IRQHandler(&htim4);
 }
@@ -188,7 +191,7 @@ void volumeMeasurementInterruptHandler(void) {
 	float frequency = htim8.Init.Period
 			* (SystemCoreClock / static_cast<float>(volumePulsesElapsed));
 
-	const float fMax = 1000;
+	constexpr float fMax = 1000;
 	frequency -= volumeBaseFrequency - fMax;
 
 	if (frequency < 0)
@@ -196,13 +199,9 @@ void volumeMeasurementInterruptHandler(void) {
 	if (frequency > fMax)
 		frequency = fMax;
 
-	float volume = frequency / fMax;
+	float volume = frequency * (1.f / fMax);
 
 	theremin::updateVolume(volume);
-
-	// TODO: this has to be moved to a dedicated timer.
-	// The bigger problem anyway is that the CPU is already at the limit :(
-	theremin::updateCutoff(Read_ADC(2) * 16000);
 
 	lastVolumeMeasurementCPUClockCount = currentCPUClockCount;
 
@@ -264,6 +263,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM1_Init();
   MX_ADC1_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 	theremin::init();
 
@@ -272,6 +272,7 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim8); // volume oscillator frequency measurement timer
 	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_3); // button debouncing timer
 	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_4); // button debouncing timer
+	HAL_TIM_Base_Start_IT(&htim7); // 40Hz timer that can be used to i.e. periodically read potentiometers
 
 	HAL_Delay(100);
 	calibrate();
@@ -714,7 +715,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 8000;
+  htim4.Init.Period = 12000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -742,6 +743,44 @@ static void MX_TIM4_Init(void)
 }
 
 /**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 64;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 65535;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
+
+}
+
+/**
   * @brief TIM8 Initialization Function
   * @param None
   * @retval None
@@ -762,7 +801,7 @@ static void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 4000;
+  htim8.Init.Period = 6000;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -854,7 +893,7 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 }

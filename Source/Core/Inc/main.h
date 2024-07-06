@@ -98,6 +98,7 @@ void Error_Handler(void);
 void pitchMeasurementInterruptHandler();
 void volumeMeasurementInterruptHandler();
 void calibrate();
+void readPotentiometers();
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -13,6 +13,7 @@ namespace theremin {
 daisysp::Oscillator oscilator;
 daisysp::LadderFilter filter;
 daisysp::OnePole freqFilter;
+float outputVolume = 1.f;
 
 float smoothstep (float x) {
    return x * x * (3.0f - 2.0f * x);
@@ -36,7 +37,7 @@ void init() {
 }
 
 void updatePitch(float frequencyHz) {
-	oscilator.SetFreq(freqFilter.Process(frequencyHz));
+	oscilator.SetFreq(frequencyHz);
 }
 
 void updateCutoff(float cutoff)
@@ -45,7 +46,7 @@ void updateCutoff(float cutoff)
 }
 
 void updateVolume(float volume) {
-	oscilator.SetAmp(volume);
+	outputVolume = volume;
 }
 
 float processSample() {
@@ -56,6 +57,6 @@ float processSample() {
 	sample = smoothstep(sample);
 	sample = 4.f * (sample - 0.75f);
 
-	return 2.f * filter.Process(sample);
+	return 2.f * filter.Process(sample) * outputVolume;
 }
 }
