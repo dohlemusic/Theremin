@@ -62,7 +62,7 @@ TIM_HandleTypeDef htim8;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-#define HALF_AUDIO_BUFFER_SIZE 384
+#define HALF_AUDIO_BUFFER_SIZE 320
 uint32_t AudioBuffer[HALF_AUDIO_BUFFER_SIZE * 2] = { 0 };
 
 /* USER CODE END PV */
@@ -92,14 +92,19 @@ float map(float value, float low1, float high1, float low2, float high2) {
 }
 
 // higher base frequency results in higher lowest pitch
-float pitchBaseFrequency = 1.0953e6;
+float pitchBaseFrequency = 1e6;
 uint32_t lastPitchMeasurementCPUClockCount = 0;
 uint32_t pitchPulsesElapsed = 0;
 
-float volumeBaseFrequency = 1.0953e6;
+float volumeBaseFrequency = 1e6;
 uint32_t lastVolumeMeasurementCPUClockCount = 0;
 uint32_t volumePulsesElapsed = 0;
 
+struct ADCReadouts
+{
+	float timbre = 0.f;
+	float filter = 0.f;
+};
 
 void calibrate()
 {
@@ -109,33 +114,36 @@ void calibrate()
 			* (SystemCoreClock / static_cast<float>(volumePulsesElapsed)) + 100;
 }
 
-float readADC(uint32_t channel)
+ADCReadouts readADC()
 {
+	/*
     ADC_ChannelConfTypeDef sConfig = {0};
 
     sConfig.Channel = channel;
-    sConfig.Rank = 1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
+    sConfig.Rank = channel;
+    sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
 
     if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
     {
         // Channel Configuration Error
         Error_Handler();
     }
-
+    */
+	ADCReadouts readouts;
     HAL_ADC_Start(&hadc2); // Start ADC conversion
     HAL_ADC_PollForConversion(&hadc2, HAL_MAX_DELAY); // Wait for conversion to complete
-    uint32_t adcValue = HAL_ADC_GetValue(&hadc2); // Get the ADC value
+    readouts.filter = HAL_ADC_GetValue(&hadc2)/(float)(1<<12);
+    readouts.timbre = HAL_ADC_GetValue(&hadc2)/(float)(1<<12);
     HAL_ADC_Stop(&hadc2); // Stop ADC
 
-    constexpr float dacToFloat = 1.f/2500.f;
-    return adcValue * dacToFloat;
+    return readouts;
 }
-
 
 void readPotentiometers()
 {
-	theremin::updateCutoff((1.f - readADC(2)) * 10000.f);
+	ADCReadouts readouts = readADC();
+	theremin::updateWaveShape(readouts.timbre);
+	theremin::updateCutoff(readouts.filter);
 }
 
 /*
@@ -164,16 +172,17 @@ void pitchMeasurementInterruptHandler(void) {
 	float frequency = htim4.Init.Period
 			* (SystemCoreClock / static_cast<float>(pitchPulsesElapsed));
 
-	// known range of the pitch oscillator
-	const float readoutMin = 0;
-	const float readoutMax = 7000;
+	const float readoutMin = 20;
+	const float readoutMax = 6000;
 
 	frequency -= pitchBaseFrequency;
 	frequency *= -1;
 	frequency *= 0.4f;
 
-	if(frequency < 1.f)
-		frequency = 1.f;
+	if(frequency < readoutMin)
+		frequency = 0.f;
+	if(frequency > readoutMax)
+		frequency = readoutMax;
 
 	theremin::updatePitch(frequency);
 	lastPitchMeasurementCPUClockCount = currentCPUClockCount;
@@ -369,7 +378,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.GainCompensation = 0;
+  hadc1.Init.GainCompensation = 40;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
@@ -437,11 +446,11 @@ static void MX_ADC2_Init(void)
   hadc2.Init.Resolution = ADC_RESOLUTION_12B;
   hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc2.Init.GainCompensation = 0;
-  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc2.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc2.Init.LowPowerAutoWait = DISABLE;
-  hadc2.Init.ContinuousConvMode = DISABLE;
-  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.ContinuousConvMode = ENABLE;
+  hadc2.Init.NbrOfConversion = 2;
   hadc2.Init.DiscontinuousConvMode = DISABLE;
   hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -457,10 +466,19 @@ static void MX_ADC2_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -567,11 +585,12 @@ static void MX_TIM1_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 5;
+  sConfigIC.ICFilter = 12;
   if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigIC.ICFilter = 5;
   if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
@@ -760,7 +779,7 @@ static void MX_TIM7_Init(void)
 
   /* USER CODE END TIM7_Init 1 */
   htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 64;
+  htim7.Init.Prescaler = 192;
   htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim7.Init.Period = 65535;
   htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

@@ -10,8 +10,11 @@
 #include <daisysp.h>
 
 namespace theremin {
-daisysp::Oscillator oscilator;
-daisysp::LadderFilter filter;
+daisysp::VariableShapeOscillator oscilator;
+
+daisysp::OnePole filter1;
+daisysp::OnePole filter2;
+
 daisysp::OnePole freqFilter;
 float outputVolume = 1.f;
 
@@ -23,13 +26,15 @@ float smoothstep (float x) {
 void init() {
 	oscilator.Init(44100);
 	oscilator.SetFreq(440.f);
-	oscilator.SetWaveform(oscilator.WAVE_POLYBLEP_TRI);
-	oscilator.SetAmp(1);
+	oscilator.SetSync(false);
+	oscilator.SetPW(0.5);
 
-	filter.Init(44100);
-	filter.SetFilterMode(filter.FilterMode::LP24);
-	filter.SetFreq(2500.f);
-	filter.SetRes(0.4f);
+	filter1.Init();
+	filter1.SetFilterMode(daisysp::OnePole::FILTER_MODE_LOW_PASS);
+	filter1.SetFrequency(0.497f);
+	filter2.Init();
+	filter2.SetFilterMode(daisysp::OnePole::FILTER_MODE_LOW_PASS);
+	filter2.SetFrequency(0.497f);
 
 	freqFilter.Init();
 	freqFilter.SetFilterMode(daisysp::OnePole::FILTER_MODE_LOW_PASS);
@@ -37,16 +42,21 @@ void init() {
 }
 
 void updatePitch(float frequencyHz) {
-	oscilator.SetFreq(frequencyHz);
+	oscilator.SetSyncFreq(freqFilter.Process(frequencyHz));
 }
 
 void updateCutoff(float cutoff)
 {
-	filter.SetFreq(cutoff);
+	filter1.SetFrequency(0.497f * cutoff);
+	filter2.SetFrequency(0.497f * cutoff);
 }
 
 void updateVolume(float volume) {
 	outputVolume = volume;
+}
+
+void updateWaveShape(float waveShape) {
+	oscilator.SetWaveshape(waveShape);
 }
 
 float processSample() {
@@ -57,6 +67,6 @@ float processSample() {
 	sample = smoothstep(sample);
 	sample = 4.f * (sample - 0.75f);
 
-	return 2.f * filter.Process(sample) * outputVolume;
+	return filter2.Process(filter1.Process(sample)) * outputVolume;
 }
 }

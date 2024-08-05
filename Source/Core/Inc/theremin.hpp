@@ -15,6 +15,7 @@ void init();
 void updatePitch(float frequencyHz);
 void updateCutoff(float cutoff);
 void updateVolume(float volume);
+void updateWaveShape(float waveShape);
 float processSample();
 }
 
