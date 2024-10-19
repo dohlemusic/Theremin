@@ -56,7 +56,6 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
-TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim8;
 
 UART_HandleTypeDef huart1;
@@ -80,7 +79,6 @@ static void MX_USART1_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_TIM7_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -116,19 +114,6 @@ void calibrate()
 
 ADCReadouts readADC()
 {
-	/*
-    ADC_ChannelConfTypeDef sConfig = {0};
-
-    sConfig.Channel = channel;
-    sConfig.Rank = channel;
-    sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
-
-    if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
-    {
-        // Channel Configuration Error
-        Error_Handler();
-    }
-    */
 	ADCReadouts readouts;
     HAL_ADC_Start(&hadc2); // Start ADC conversion
     HAL_ADC_PollForConversion(&hadc2, HAL_MAX_DELAY); // Wait for conversion to complete
@@ -139,6 +124,7 @@ ADCReadouts readADC()
     return readouts;
 }
 
+// Called by main(), lowest priority
 void readPotentiometers()
 {
 	ADCReadouts readouts = readADC();
@@ -272,7 +258,6 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM1_Init();
   MX_ADC1_Init();
-  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 	theremin::init();
 
@@ -281,7 +266,6 @@ int main(void)
 	HAL_TIM_Base_Start_IT(&htim8); // volume oscillator frequency measurement timer
 	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_3); // button debouncing timer
 	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_4); // button debouncing timer
-	HAL_TIM_Base_Start_IT(&htim7); // 40Hz timer that can be used to i.e. periodically read potentiometers
 
 	HAL_Delay(100);
 	calibrate();
@@ -299,6 +283,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+		readPotentiometers();
+		HAL_Delay(50);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -758,44 +744,6 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
-
-}
-
-/**
-  * @brief TIM7 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM7_Init(void)
-{
-
-  /* USER CODE BEGIN TIM7_Init 0 */
-
-  /* USER CODE END TIM7_Init 0 */
-
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM7_Init 1 */
-
-  /* USER CODE END TIM7_Init 1 */
-  htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 192;
-  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 65535;
-  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM7_Init 2 */
-
-  /* USER CODE END TIM7_Init 2 */
 
 }
 
